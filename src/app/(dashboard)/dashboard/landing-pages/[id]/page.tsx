@@ -1,7 +1,18 @@
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { LandingEditor } from "@/components/builder/landing-editor";
 import { createClient } from "@/lib/supabase/server";
 import type { LandingPageRow } from "@/types/landing";
+
+async function publicSiteOrigin(): Promise<string> {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+  if (envUrl) return envUrl;
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (!host) return "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
+}
 
 export default async function EditLandingPage({
   params,
@@ -23,6 +34,8 @@ export default async function EditLandingPage({
 
   if (error || !page) notFound();
 
+  const siteOrigin = await publicSiteOrigin();
+
   const { data: settings } = await supabase
     .from("global_settings")
     .select("facebook_pixel_id, tiktok_pixel_id")
@@ -39,6 +52,7 @@ export default async function EditLandingPage({
       </div>
       <LandingEditor
         initialPage={page as unknown as LandingPageRow}
+        publicSiteOrigin={siteOrigin}
         globalPixels={{
           fb: settings?.facebook_pixel_id ?? null,
           tt: settings?.tiktok_pixel_id ?? null,

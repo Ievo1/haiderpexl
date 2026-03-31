@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { PixelScripts, trackPurchaseEvent } from "@/components/landing/pixel-scripts";
+import { PixelScripts, trackLeadEvent, trackPurchaseEvent } from "@/components/landing/pixel-scripts";
 import { getLandingClasses } from "@/lib/landing-appearance-classes";
 import type { LandingAppearance, PixelPageConfig } from "@/types/landing";
 
+/** بدون PageView على صفحة الشكر؛ أحداث Lead و Purchase تُرسل يدوياً بعد تحميل السكربتات */
 function useThankYouPixelConfig(pixelConfig: PixelPageConfig): PixelPageConfig {
   return useMemo(
     () => ({
       ...pixelConfig,
       trackPageView: false,
-      trackLead: false,
     }),
     [
       pixelConfig.enabled,
@@ -43,15 +43,23 @@ export function ThankYouClient({
 
   useEffect(() => {
     let cancelled = false;
-    const t = window.setTimeout(() => {
+    /* تأخير بسيط حتى يجهز fbq / ttq بعد تنقل client-side من النموذج */
+    const leadMs = 500;
+    const purchaseMs = 1100;
+    const tLead = window.setTimeout(() => {
       if (cancelled) return;
-      trackPurchaseEvent(cfg, value, currency);
-    }, 400);
+      trackLeadEvent(pixelConfig);
+    }, leadMs);
+    const tPurchase = window.setTimeout(() => {
+      if (cancelled) return;
+      trackPurchaseEvent(pixelConfig, value, currency);
+    }, purchaseMs);
     return () => {
       cancelled = true;
-      window.clearTimeout(t);
+      window.clearTimeout(tLead);
+      window.clearTimeout(tPurchase);
     };
-  }, [cfg, value, currency]);
+  }, [pixelConfig, value, currency]);
 
   return (
     <div className={c.page}>

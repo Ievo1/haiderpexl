@@ -11,7 +11,6 @@ import type {
 import type { PixelPageConfig } from "@/types/landing";
 import { getLandingClasses } from "@/lib/landing-appearance-classes";
 import { normalizeFormConfig } from "@/lib/form-config";
-import { trackLeadEvent } from "@/components/landing/pixel-scripts";
 import { isValidIraqPhone, normalizeIraqPhone } from "@/lib/phone-iq";
 import { cn } from "@/lib/utils";
 
@@ -179,7 +178,6 @@ export function LeadForm({
         setStatus("error");
         return;
       }
-      trackLeadEvent(pixelConfig);
       setStatus("done");
       const price = selectedQuantityOption?.price ?? 0;
       const v = Number.isFinite(price) ? price : 0;

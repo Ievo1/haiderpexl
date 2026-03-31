@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { duplicateLandingPage, updateLandingPage } from "@/lib/actions/landing";
 import { PixelTrackingChecklist } from "@/components/dashboard/pixel-tracking-checklist";
 import type {
@@ -22,9 +22,12 @@ type Tab = "sections" | "form" | "pixels";
 
 export function LandingEditor({
   initialPage,
+  publicSiteOrigin,
   globalPixels,
 }: {
   initialPage: LandingPageRow;
+  /** أصل الموقع العام (مثلاً https://example.com) — من الهيدر أو NEXT_PUBLIC_APP_URL */
+  publicSiteOrigin: string;
   globalPixels: { fb: string | null; tt: string | null };
 }) {
   const router = useRouter();
@@ -36,9 +39,21 @@ export function LandingEditor({
   const [tab, setTab] = useState<Tab>("sections");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [dupLoading, setDupLoading] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [clientOrigin, setClientOrigin] = useState("");
   const lastSavedJson = useRef(JSON.stringify(initialPage));
   const pageRef = useRef(page);
   pageRef.current = page;
+
+  useEffect(() => {
+    if (!publicSiteOrigin && typeof window !== "undefined") {
+      setClientOrigin(window.location.origin);
+    }
+  }, [publicSiteOrigin]);
+
+  const siteBase = (publicSiteOrigin || clientOrigin).replace(/\/$/, "");
+  const publicLandingUrl =
+    siteBase && page.slug ? `${siteBase}/l/${encodeURI(page.slug)}` : "";
 
   const snapshot = useMemo(() => JSON.stringify(page), [page]);
 
@@ -87,6 +102,17 @@ export function LandingEditor({
     setDupLoading(false);
     if ("error" in res && res.error) return;
     if ("id" in res && res.id) router.push(`/dashboard/landing-pages/${res.id}`);
+  }
+
+  async function copyPublicUrl() {
+    if (!publicLandingUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicLandingUrl);
+      setCopiedUrl(true);
+      window.setTimeout(() => setCopiedUrl(false), 2000);
+    } catch {
+      /* ignore */
+    }
   }
 
   return (
@@ -189,9 +215,11 @@ export function LandingEditor({
             )}
           </span>
           <Link
-            href={`/l/${page.slug}?preview=1`}
+            href={`/dashboard/landing-pages/${page.id}/preview`}
             target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium dark:border-zinc-800 dark:bg-zinc-950"
+            title="معاينة داخل لوحة التحكم — بدون ?preview في الرابط العام"
           >
             <ExternalLink className="h-4 w-4" /> معاينة
           </Link>
@@ -200,7 +228,7 @@ export function LandingEditor({
             onClick={handlePublish}
             className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-500"
           >
-            نشر
+            نشر للجميع
           </button>
           <button
             type="button"
@@ -210,6 +238,56 @@ export function LandingEditor({
           >
             {dupLoading ? "…" : "نسخ الصفحة"}
           </button>
+        </div>
+
+        <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+            رابط النشر العام (للزبائن)
+          </label>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            بعد <strong>نشر للجميع</strong> انسخ هذا الرابط أو افتحه — يعمل بدون تسجيل دخول. معاينة من زر «معاينة» تبقى داخل لوحة التحكم فقط.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              readOnly
+              dir="ltr"
+              value={page.published ? publicLandingUrl : "انشر الصفحة أولاً — ثم يظهر الرابط الكامل هنا"}
+              className={cn(
+                "min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm",
+                page.published
+                  ? "border-emerald-200 bg-white font-mono text-zinc-900 dark:border-emerald-900/50 dark:bg-zinc-950 dark:text-zinc-100"
+                  : "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-500",
+              )}
+              onFocus={(e) => page.published && e.currentTarget.select()}
+            />
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                disabled={!page.published || !publicLandingUrl}
+                onClick={copyPublicUrl}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950"
+              >
+                {copiedUrl ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                {copiedUrl ? "تم النسخ" : "نسخ"}
+              </button>
+              {page.published && publicLandingUrl ? (
+                <Link
+                  href={`/l/${page.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  فتح الرابط
+                </Link>
+              ) : null}
+            </div>
+          </div>
+          {!page.published ? (
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+              الصفحة مسودة: الزوار يحصلون على 404 على الرابط العام حتى تضغط «نشر للجميع».
+            </p>
+          ) : null}
         </div>
       </div>
 
