@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { PixelScripts, trackLeadEvent, trackPurchaseEvent } from "@/components/landing/pixel-scripts";
+import {
+  clearTikTokMamSession,
+  peekTikTokMamFromSession,
+  PixelScripts,
+  trackLeadEvent,
+  trackPurchaseEvent,
+} from "@/components/landing/pixel-scripts";
 import { getLandingClasses } from "@/lib/landing-appearance-classes";
 import type { LandingAppearance, PixelPageConfig } from "@/types/landing";
 
@@ -27,6 +33,7 @@ export function ThankYouClient({
   fbId,
   ttId,
   pixelConfig,
+  contentId,
   value,
   currency,
   appearance = "light",
@@ -34,6 +41,8 @@ export function ThankYouClient({
   fbId: string | null | undefined;
   ttId: string | null | undefined;
   pixelConfig: PixelPageConfig;
+  /** slug أو id الصفحة — لـ TikTok content_id */
+  contentId: string;
   value: number;
   currency: string;
   appearance?: LandingAppearance;
@@ -42,28 +51,30 @@ export function ThankYouClient({
   const c = getLandingClasses(appearance ?? "light");
 
   useEffect(() => {
+    const mam = peekTikTokMamFromSession();
     let cancelled = false;
-    /* تأخير بسيط حتى يجهز fbq / ttq بعد تنقل client-side من النموذج */
+    const tClear = window.setTimeout(() => clearTikTokMamSession(), 15000);
     const leadMs = 500;
     const purchaseMs = 1100;
     const tLead = window.setTimeout(() => {
       if (cancelled) return;
-      trackLeadEvent(pixelConfig);
+      trackLeadEvent(pixelConfig, contentId, mam);
     }, leadMs);
     const tPurchase = window.setTimeout(() => {
       if (cancelled) return;
-      trackPurchaseEvent(pixelConfig, value, currency);
+      trackPurchaseEvent(pixelConfig, value, currency, contentId, mam);
     }, purchaseMs);
     return () => {
       cancelled = true;
+      window.clearTimeout(tClear);
       window.clearTimeout(tLead);
       window.clearTimeout(tPurchase);
     };
-  }, [pixelConfig, value, currency]);
+  }, [pixelConfig, contentId, value, currency]);
 
   return (
     <div className={c.page}>
-      <PixelScripts fbId={fbId} ttId={ttId} pixelConfig={cfg} />
+      <PixelScripts fbId={fbId} ttId={ttId} pixelConfig={cfg} contentId={contentId} />
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <div
           className={`mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full text-3xl ${c.thankCheck}`}

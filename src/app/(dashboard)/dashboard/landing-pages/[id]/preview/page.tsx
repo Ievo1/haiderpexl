@@ -39,7 +39,7 @@ export default async function LandingPreviewPage({
 
   const { data: settings } = await supabase
     .from("global_settings")
-    .select("facebook_pixel_id, tiktok_pixel_id")
+    .select("facebook_pixel_id")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -73,7 +73,7 @@ export default async function LandingPreviewPage({
           formConfig={row.form_config as FormConfig}
           pixelConfig={row.pixel_config as PixelPageConfig}
           fbPixelId={settings?.facebook_pixel_id}
-          ttPixelId={settings?.tiktok_pixel_id}
+          ttPixelId={row.tiktok_pixel_id}
           trackVisit={false}
           appearance={appearance}
         />

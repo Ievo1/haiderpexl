@@ -38,7 +38,7 @@ export default async function EditLandingPage({
 
   const { data: settings } = await supabase
     .from("global_settings")
-    .select("facebook_pixel_id, tiktok_pixel_id")
+    .select("facebook_pixel_id")
     .eq("user_id", user!.id)
     .maybeSingle();
 
@@ -53,10 +53,7 @@ export default async function EditLandingPage({
       <LandingEditor
         initialPage={page as unknown as LandingPageRow}
         publicSiteOrigin={siteOrigin}
-        globalPixels={{
-          fb: settings?.facebook_pixel_id ?? null,
-          tt: settings?.tiktok_pixel_id ?? null,
-        }}
+        globalFacebookPixelId={settings?.facebook_pixel_id ?? null}
       />
     </div>
   );

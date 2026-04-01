@@ -12,8 +12,8 @@ type Item = { id: string; title: string; detail?: string };
 const CHECKLIST_ITEMS: Item[] = [
   {
     id: "ids",
-    title: "معرّفات البيكسل في الإعدادات",
-    detail: "من «الإعدادات» أدخل Facebook Pixel ID و TikTok Pixel ID (أرقام فقط، بدون مسافات) ثم احفظ.",
+    title: "معرّفات البيكسل",
+    detail: "Facebook: من «الإعدادات». TikTok: من تبويب «البيكسل والتتبع» داخل محرّر كل صفحة هبوط (كل صفحة لها Pixel خاص).",
   },
   {
     id: "published",
@@ -33,7 +33,7 @@ const CHECKLIST_ITEMS: Item[] = [
   {
     id: "lead",
     title: "حدث Lead (إرسال النموذج)",
-    detail: "فعّل «Lead». فيسبوك: Lead. تيك توك: SubmitForm. يُطلق بعد نجاح إرسال النموذج فقط.",
+    detail: "فعّل «Lead». تيك توك: SubmitForm + CompletePayment مع رقم الهاتف/الاسم/العنوان (MAM). AAM في لوحة TikTok لا يُحتسب في بعض التحذيرات — الكود يرسل مطابقة يدوية من حقول النموذج.",
   },
   {
     id: "purchase",

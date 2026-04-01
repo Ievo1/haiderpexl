@@ -10,6 +10,7 @@ import type {
 } from "@/types/landing";
 import type { PixelPageConfig } from "@/types/landing";
 import { getLandingClasses } from "@/lib/landing-appearance-classes";
+import { tikTokAfterLeadFormSuccess } from "@/components/landing/pixel-scripts";
 import { normalizeFormConfig } from "@/lib/form-config";
 import { isValidIraqPhone, normalizeIraqPhone } from "@/lib/phone-iq";
 import { cn } from "@/lib/utils";
@@ -181,6 +182,13 @@ export function LeadForm({
       setStatus("done");
       const price = selectedQuantityOption?.price ?? 0;
       const v = Number.isFinite(price) ? price : 0;
+      tikTokAfterLeadFormSuccess({
+        pixelConfig,
+        contentId: slug,
+        payload,
+        orderValue: v,
+        currencyIso: "IQD",
+      });
       router.push(
         `/l/${encodeURIComponent(slug)}/thank-you?value=${encodeURIComponent(String(v))}&cur=IQD`,
       );

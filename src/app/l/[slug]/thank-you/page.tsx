@@ -35,7 +35,7 @@ export default async function ThankYouPage({ params, searchParams }: Props) {
 
   const { data: settings } = await admin
     .from("global_settings")
-    .select("facebook_pixel_id, tiktok_pixel_id")
+    .select("facebook_pixel_id")
     .eq("user_id", page.user_id)
     .maybeSingle();
 
@@ -46,11 +46,14 @@ export default async function ThankYouPage({ params, searchParams }: Props) {
   const currency = /^[A-Z]{3}$/.test(cur) ? cur : "IQD";
   const appearance = (row.appearance as LandingAppearance | undefined) ?? "light";
 
+  const pixelContentId = row.slug?.trim() || row.id;
+
   return (
     <ThankYouClient
       fbId={settings?.facebook_pixel_id}
-      ttId={settings?.tiktok_pixel_id}
+      ttId={row.tiktok_pixel_id}
       pixelConfig={row.pixel_config as PixelPageConfig}
+      contentId={pixelContentId}
       value={value}
       currency={currency}
       appearance={appearance}

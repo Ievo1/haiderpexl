@@ -141,6 +141,8 @@ export interface LandingPageRow {
   sections: LandingSection[];
   form_config: FormConfig;
   pixel_config: PixelPageConfig;
+  /** بكسل TikTok لهذه الصفحة فقط (يُحمّل على /l/[slug] وصفحة الشكر) */
+  tiktok_pixel_id?: string | null;
   custom_domain: string | null;
   visit_count: number;
   lead_count: number;

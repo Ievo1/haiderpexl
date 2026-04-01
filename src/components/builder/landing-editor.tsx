@@ -23,18 +23,20 @@ type Tab = "sections" | "form" | "pixels";
 export function LandingEditor({
   initialPage,
   publicSiteOrigin,
-  globalPixels,
+  globalFacebookPixelId,
 }: {
   initialPage: LandingPageRow;
   /** أصل الموقع العام (مثلاً https://example.com) — من الهيدر أو NEXT_PUBLIC_APP_URL */
   publicSiteOrigin: string;
-  globalPixels: { fb: string | null; tt: string | null };
+  /** Facebook من إعدادات الحساب — TikTok من حقل هذه الصفحة */
+  globalFacebookPixelId: string | null;
 }) {
   const router = useRouter();
   const [page, setPage] = useState<LandingPageRow>(() => ({
     ...initialPage,
     appearance: (initialPage.appearance as LandingAppearance | undefined) ?? "light",
     form_config: normalizeFormConfig(initialPage.form_config as FormConfig),
+    tiktok_pixel_id: initialPage.tiktok_pixel_id ?? null,
   }));
   const [tab, setTab] = useState<Tab>("sections");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -70,6 +72,7 @@ export function LandingEditor({
         sections: p.sections as LandingSection[],
         form_config: p.form_config as FormConfig,
         pixel_config: p.pixel_config as PixelPageConfig,
+        tiktok_pixel_id: p.tiktok_pixel_id?.trim() || null,
         custom_domain: p.custom_domain,
       });
       if ("error" in res && res.error) {
@@ -333,9 +336,34 @@ export function LandingEditor({
       {tab === "pixels" ? (
         <div className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
           <div className="rounded-xl bg-zinc-50 p-4 text-sm dark:bg-zinc-900">
-            <p className="font-medium">معرّفات البيكسل العامة (من الإعدادات)</p>
+            <p className="font-medium">Facebook Pixel (من إعدادات الحساب)</p>
             <p className="mt-1 text-zinc-600 dark:text-zinc-400" dir="ltr">
-              Facebook: {globalPixels.fb || "—"} | TikTok: {globalPixels.tt || "—"}
+              {globalFacebookPixelId || "—"}
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">
+              بكسل TikTok يُعرّف <strong>لهذه الصفحة فقط</strong> في الحقل أدناه — كل صفحة هبوط يمكن أن يكون لها Pixel ID مختلف.
+            </p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-zinc-500">TikTok Pixel ID (هذه الصفحة)</label>
+            <input
+              dir="ltr"
+              placeholder="مثال: D75HT53C77UBIUFTU9FG"
+              className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 font-mono text-sm dark:border-zinc-800 dark:bg-zinc-950"
+              value={page.tiktok_pixel_id ?? ""}
+              onChange={(e) =>
+                setPage((p) => ({
+                  ...p,
+                  tiktok_pixel_id: e.target.value === "" ? null : e.target.value,
+                }))
+              }
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              يُحمّل سكربت TikTok الرسمي (نفس القالب من مركز الأعمال) على صفحة الهبوط العامة وصفحة الشكر لهذه الصفحة فقط. استخدم المعرف كما يظهر بعد{" "}
+              <span dir="ltr" className="font-mono">
+                ttq.load(&apos;...&apos;)
+              </span>{" "}
+              — أحرف إنجليزية وأرقام وشرطة فقط. اتركه فارغاً لتعطيل TikTok هنا.
             </p>
           </div>
           <label className="flex items-center gap-2 text-sm">

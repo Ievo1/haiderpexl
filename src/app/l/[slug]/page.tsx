@@ -66,7 +66,7 @@ export default async function PublicLandingPage({ params }: Props) {
 
   const { data: settings } = await admin
     .from("global_settings")
-    .select("facebook_pixel_id, tiktok_pixel_id")
+    .select("facebook_pixel_id")
     .eq("user_id", page.user_id)
     .maybeSingle();
 
@@ -81,7 +81,7 @@ export default async function PublicLandingPage({ params }: Props) {
       formConfig={row.form_config as FormConfig}
       pixelConfig={row.pixel_config as PixelPageConfig}
       fbPixelId={settings?.facebook_pixel_id}
-      ttPixelId={settings?.tiktok_pixel_id}
+      ttPixelId={row.tiktok_pixel_id}
       trackVisit
       appearance={appearance}
     />

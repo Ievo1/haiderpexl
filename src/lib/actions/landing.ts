@@ -48,6 +48,7 @@ export async function createLandingPage(input: { title: string; slug?: string })
       form_config: defaultFormConfig(),
       pixel_config: DEFAULT_PIXEL_PAGE,
       appearance: "light" as LandingAppearance,
+      tiktok_pixel_id: null,
     })
     .select("id")
     .single();
@@ -66,6 +67,7 @@ export async function updateLandingPage(
     sections?: LandingSection[];
     form_config?: FormConfig;
     pixel_config?: PixelPageConfig;
+    tiktok_pixel_id?: string | null;
     custom_domain?: string | null;
     appearance?: LandingAppearance;
   },
@@ -120,6 +122,7 @@ export async function duplicateLandingPage(id: string) {
       form_config: row.form_config,
       pixel_config: row.pixel_config,
       appearance: (row as { appearance?: LandingAppearance }).appearance ?? "light",
+      tiktok_pixel_id: (row as { tiktok_pixel_id?: string | null }).tiktok_pixel_id ?? null,
       custom_domain: null,
     })
     .select("id")

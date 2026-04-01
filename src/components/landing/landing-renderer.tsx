@@ -55,10 +55,16 @@ export function LandingRenderer({
 }) {
   const mode: LandingAppearance = appearance ?? "light";
   const c = getLandingClasses(mode);
+  const pixelContentId = slug.trim() || landingPageId;
 
   return (
     <div className={c.page}>
-      <PixelScripts fbId={fbPixelId} ttId={ttPixelId} pixelConfig={pixelConfig} />
+      <PixelScripts
+        fbId={fbPixelId}
+        ttId={ttPixelId}
+        pixelConfig={pixelConfig}
+        contentId={pixelContentId}
+      />
       {trackVisit ? <TrackView slug={slug} /> : null}
 
       <main className="mx-auto max-w-3xl px-4 pb-24 pt-10 sm:px-6">
