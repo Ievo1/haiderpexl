@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { useEffect } from "react";
-import { normalizeIraqPhone } from "@/lib/phone-iq";
+import { formatPhoneForTikTokE164, sanitizeTikTokPixelId as sanitizeTikTokPixelIdLib } from "@/lib/tiktok-mam-format";
 import type { PixelPageConfig } from "@/types/landing";
 
 declare global {
@@ -19,6 +19,8 @@ declare global {
 
 /** يُخزَّن بعد إرسال النموذج ليُمرَّر لأحداث صفحة الشكر (MAM) */
 const TT_MAM_SESSION_KEY = "ld_tt_mam_v1";
+/** نفس event_id لـ SubmitForm: Pixel + Events API (إلغاء التكرار) */
+const TT_SUBMIT_EVENT_ID_KEY = "ld_tt_submit_event_id_v1";
 
 /** حقول Manual Advanced Matching المدعومة من TikTok للأحداث / identify */
 export type TikTokMamPayload = {
@@ -31,15 +33,21 @@ export type TikTokMamPayload = {
   zip?: string;
   country?: string;
   address?: string;
+  /** SHA-256 hex lowercase لمعرّف ثابت (مثل leadId) — مطابقة TikTok للمعرّف الخارجي */
+  external_id?: string;
 };
 
-function formatPhoneForTikTokMam(raw: string): string | null {
-  const normalized = normalizeIraqPhone(raw);
-  const d = (normalized ?? raw).replace(/\D/g, "");
-  if (d.length === 11 && d.startsWith("07")) return `964${d.slice(1)}`;
-  if (d.length === 10 && d.startsWith("7")) return `964${d}`;
-  if (d.startsWith("964") && d.length >= 12) return d;
-  return d.length >= 8 ? d : null;
+/** TikTok: تجزئة external_id بـ SHA-256 (hex صغير) كما في دليل المعرّف الخارجي */
+async function sha256HexLower(text: string): Promise<string | null> {
+  try {
+    if (typeof crypto === "undefined" || !crypto.subtle) return null;
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return null;
+  }
 }
 
 /** يستخرج بيانات المطابقة من payload النموذج (اسم، هاتف، محافظة، عنوان، بريد إن وُجد) */
@@ -49,7 +57,7 @@ export function extractTikTokMamFromLeadPayload(
   const out: TikTokMamPayload = {};
 
   const phoneRaw = payload.phone != null ? String(payload.phone) : "";
-  const phoneTt = formatPhoneForTikTokMam(phoneRaw);
+  const phoneTt = formatPhoneForTikTokE164(phoneRaw);
   if (phoneTt) out.phone_number = phoneTt;
 
   for (const key of Object.keys(payload)) {
@@ -64,8 +72,11 @@ export function extractTikTokMamFromLeadPayload(
   if (parts.length >= 1) out.first_name = parts[0];
   if (parts.length >= 2) out.last_name = parts.slice(1).join(" ");
 
-  const gov = String(payload.governorate ?? payload.city ?? "").trim();
+  /* TikTok city: أولاً قيمة حقل «المحافظة»؛ إن كانت فارغة نستخدم حقل city (نماذج قديمة) */
+  const gov = String(payload.governorate ?? "").trim();
+  const legacyCity = String(payload.city ?? "").trim();
   if (gov) out.city = gov;
+  else if (legacyCity) out.city = legacyCity;
 
   const addr = String(payload.address ?? "").trim();
   if (addr) out.address = addr;
@@ -87,6 +98,7 @@ function mamForTikTokEvent(m: TikTokMamPayload | null | undefined): Record<strin
     "zip",
     "country",
     "address",
+    "external_id",
   ];
   for (const k of keys) {
     const v = m[k];
@@ -95,22 +107,41 @@ function mamForTikTokEvent(m: TikTokMamPayload | null | undefined): Record<strin
   return o;
 }
 
-/** بعد نجاح إرسال الطلب: identify + قمع TikTok + تخزين MAM لصفحة الشكر */
-export function tikTokAfterLeadFormSuccess(opts: {
+/** بعد نجاح إرسال الطلب: identify + قمع TikTok + تخزين MAM لصفحة الشكر (يشمل external_id المُجزّأ من leadId) */
+export async function tikTokAfterLeadFormSuccess(opts: {
   pixelConfig: PixelPageConfig;
   contentId: string;
   payload: Record<string, unknown>;
   orderValue: number;
   currencyIso: string;
+  /** مُعرّف الطلب/العميل من الخادم — يُرسل لـ TikTok كـ external_id بعد التجزئة */
+  leadId?: string | null;
+  /** يُطابق حدث SubmitForm على الخادم (Events API) لإلغاء التكرار */
+  submitEventId?: string | null;
 }) {
-  const { pixelConfig, contentId, payload, orderValue, currencyIso } = opts;
+  const { pixelConfig, contentId, payload, orderValue, currencyIso, leadId, submitEventId } = opts;
   if (!pixelConfig.enabled || !pixelConfig.useTikTok) return;
 
   const mam = extractTikTokMamFromLeadPayload(payload);
+  const rawId = leadId != null ? String(leadId).trim() : "";
+  if (rawId) {
+    const hashed = await sha256HexLower(rawId);
+    if (hashed) mam.external_id = hashed;
+  }
+
   try {
     sessionStorage.setItem(TT_MAM_SESSION_KEY, JSON.stringify(mam));
   } catch {
     /* private mode */
+  }
+
+  const sev = submitEventId != null ? String(submitEventId).trim() : "";
+  if (sev) {
+    try {
+      sessionStorage.setItem(TT_SUBMIT_EVENT_ID_KEY, sev);
+    } catch {
+      /* private mode */
+    }
   }
 
   if (typeof window.ttq === "undefined") return;
@@ -169,17 +200,25 @@ export function peekTikTokMamFromSession(): TikTokMamPayload | null {
 export function clearTikTokMamSession() {
   try {
     sessionStorage.removeItem(TT_MAM_SESSION_KEY);
+    sessionStorage.removeItem(TT_SUBMIT_EVENT_ID_KEY);
   } catch {
     /* ignore */
   }
 }
 
+export function peekTikTokSubmitEventId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = sessionStorage.getItem(TT_SUBMIT_EVENT_ID_KEY);
+    return v && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** يمنع حقن نص في سكربت البكسل — معرّفات TikTok عادة أحرف وأرقام وشرطة */
 export function sanitizeTikTokPixelId(raw: string | null | undefined): string | null {
-  if (raw == null) return null;
-  const s = String(raw).trim();
-  if (!s || !/^[A-Za-z0-9_-]+$/.test(s)) return null;
-  return s;
+  return sanitizeTikTokPixelIdLib(raw);
 }
 
 /** معرّف منتج/عرض لكتالوج TikTok — حرف واحد على الأقل غير مسافة */
@@ -324,10 +363,12 @@ export function trackLeadEvent(
   pixelConfig: PixelPageConfig,
   contentId: string,
   mam?: TikTokMamPayload | null,
+  submitEventId?: string | null,
 ) {
   if (!pixelConfig.enabled) return;
   const cid = normalizePixelContentId(contentId);
   const ttExtra = mamForTikTokEvent(mam);
+  const sev = submitEventId != null && String(submitEventId).trim() ? String(submitEventId).trim() : null;
   if (pixelConfig.trackLead && pixelConfig.useFacebook && typeof window.fbq === "function") {
     window.fbq(
       "track",
@@ -337,6 +378,7 @@ export function trackLeadEvent(
   }
   if (pixelConfig.trackLead && pixelConfig.useTikTok && window.ttq && cid) {
     window.ttq.track("SubmitForm", {
+      ...(sev ? { event_id: sev } : {}),
       content_id: cid,
       content_type: "product",
       ...ttExtra,
@@ -351,11 +393,17 @@ export function trackPurchaseEvent(
   currency: string = "IQD",
   contentId: string,
   mam?: TikTokMamPayload | null,
+  /** مُنفصل عن SubmitForm — لا يُشارك event_id مع الليد */
+  purchaseEventId?: string | null,
 ) {
   if (!pixelConfig.enabled || !pixelConfig.trackPurchase) return;
   const v = Number.isFinite(value) && value >= 0 ? value : 0;
   const cid = normalizePixelContentId(contentId);
   const ttExtra = mamForTikTokEvent(mam);
+  const pev =
+    purchaseEventId != null && String(purchaseEventId).trim()
+      ? String(purchaseEventId).trim()
+      : null;
   if (pixelConfig.useFacebook && typeof window.fbq === "function") {
     window.fbq("track", "Purchase", {
       value: v,
@@ -365,6 +413,7 @@ export function trackPurchaseEvent(
   }
   if (pixelConfig.useTikTok && window.ttq) {
     const payload: Record<string, unknown> = {
+      ...(pev ? { event_id: pev } : {}),
       value: v,
       currency,
       ...ttExtra,

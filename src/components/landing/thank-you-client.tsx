@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import {
   clearTikTokMamSession,
   peekTikTokMamFromSession,
+  peekTikTokSubmitEventId,
   PixelScripts,
   trackLeadEvent,
   trackPurchaseEvent,
@@ -58,7 +59,7 @@ export function ThankYouClient({
     const purchaseMs = 1100;
     const tLead = window.setTimeout(() => {
       if (cancelled) return;
-      trackLeadEvent(pixelConfig, contentId, mam);
+      trackLeadEvent(pixelConfig, contentId, mam, peekTikTokSubmitEventId());
     }, leadMs);
     const tPurchase = window.setTimeout(() => {
       if (cancelled) return;

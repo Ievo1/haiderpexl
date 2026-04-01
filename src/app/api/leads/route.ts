@@ -3,12 +3,29 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTelegramNotification } from "@/lib/integrations/telegram";
 import { isValidIraqPhone, normalizeIraqPhone } from "@/lib/phone-iq";
+import { sendTikTokSubmitFormServer } from "@/lib/tiktok-events-api";
+import { sanitizeTikTokPixelId } from "@/lib/tiktok-mam-format";
+
+const tiktokPayloadSchema = z
+  .object({
+    event_id: z.string().min(8).max(200),
+    ttclid: z.string().max(500).optional(),
+    ttp: z.string().max(500).optional(),
+    page_url: z.string().max(2048).optional(),
+    referrer: z.string().max(2048).optional(),
+    order_value: z.number().min(0).max(1e12).optional(),
+    currency: z.string().length(3).optional(),
+    content_id: z.string().max(200).optional(),
+  })
+  .optional();
 
 const bodySchema = z.object({
   landingPageId: z.string().uuid(),
   payload: z.record(z.string(), z.unknown()),
   /** حقل وهمي ضد البوتات — يجب أن يبقى فارغاً */
   website: z.string().optional().default(""),
+  /** سياق TikTok: event_id لإلغاء التكرار مع البكسل + ttclid / _ttp */
+  tiktok: tiktokPayloadSchema,
 });
 
 const RATE_MS = 90_000;
@@ -35,7 +52,7 @@ export async function POST(req: Request) {
 
   const { data: page, error: pageErr } = await admin
     .from("landing_pages")
-    .select("id, user_id, title, slug, published, lead_count")
+    .select("id, user_id, title, slug, published, lead_count, tiktok_pixel_id")
     .eq("id", parsed.data.landingPageId)
     .maybeSingle();
 
@@ -200,6 +217,38 @@ export async function POST(req: Request) {
 
   if (settings?.google_sheet_webhook_url) {
     void postJson(settings.google_sheet_webhook_url);
+  }
+
+  const ttToken = process.env.TIKTOK_ACCESS_TOKEN?.trim();
+  const ttPixel = sanitizeTikTokPixelId(
+    (page as { tiktok_pixel_id?: string | null }).tiktok_pixel_id,
+  );
+  const tt = parsed.data.tiktok;
+  if (ttToken && ttPixel && tt?.event_id) {
+    const cur = tt.currency && /^[A-Za-z]{3}$/.test(tt.currency) ? tt.currency.toUpperCase() : "IQD";
+    const val =
+      tt.order_value != null && Number.isFinite(tt.order_value) ? Math.max(0, tt.order_value) : 0;
+    const cid =
+      (tt.content_id && String(tt.content_id).trim()) ||
+      (page.slug && String(page.slug).trim()) ||
+      page.id;
+
+    void sendTikTokSubmitFormServer({
+      accessToken: ttToken,
+      pixelCode: ttPixel,
+      eventId: tt.event_id,
+      leadId: inserted.id,
+      payload,
+      req,
+      pageUrl: tt.page_url,
+      referrer: tt.referrer,
+      ttclid: tt.ttclid,
+      ttp: tt.ttp,
+      contentId: cid,
+      value: val,
+      currency: cur,
+      testEventCode: process.env.TIKTOK_TEST_EVENT_CODE?.trim(),
+    });
   }
 
   return NextResponse.json({ ok: true, leadId: inserted.id });

@@ -36,6 +36,17 @@ function phoneDigitsOnly(input: string): string {
   return input.replace(/\D/g, "").slice(0, 11);
 }
 
+function readBrowserCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const row = document.cookie.split("; ").find((r) => r.startsWith(`${name}=`));
+  if (!row) return undefined;
+  try {
+    return decodeURIComponent(row.slice(name.length + 1));
+  } catch {
+    return row.slice(name.length + 1);
+  }
+}
+
 export function LeadForm({
   landingPageId,
   slug,
@@ -151,14 +162,47 @@ export function LeadForm({
 
     setSubmitError(null);
     try {
+      const price = selectedQuantityOption?.price ?? 0;
+      const orderVal = Number.isFinite(price) ? price : 0;
+      const submitEventId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `ld_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+
+      const tiktokBody =
+        pixelConfig.enabled && pixelConfig.useTikTok
+          ? {
+              event_id: submitEventId,
+              ttclid:
+                typeof window !== "undefined"
+                  ? new URLSearchParams(window.location.search).get("ttclid") ?? undefined
+                  : undefined,
+              ttp: readBrowserCookie("_ttp"),
+              page_url: typeof window !== "undefined" ? window.location.href : undefined,
+              referrer:
+                typeof document !== "undefined" && document.referrer
+                  ? document.referrer
+                  : undefined,
+              order_value: orderVal,
+              currency: "IQD",
+              content_id: slug,
+            }
+          : undefined;
+
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ landingPageId, payload, website: honeypot }),
+        body: JSON.stringify({
+          landingPageId,
+          payload,
+          website: honeypot,
+          ...(tiktokBody ? { tiktok: tiktokBody } : {}),
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
         code?: string;
+        leadId?: string;
       };
       if (!res.ok) {
         if (res.status === 429) {
@@ -180,14 +224,15 @@ export function LeadForm({
         return;
       }
       setStatus("done");
-      const price = selectedQuantityOption?.price ?? 0;
-      const v = Number.isFinite(price) ? price : 0;
-      tikTokAfterLeadFormSuccess({
+      const v = orderVal;
+      await tikTokAfterLeadFormSuccess({
         pixelConfig,
         contentId: slug,
         payload,
         orderValue: v,
         currencyIso: "IQD",
+        leadId: typeof data.leadId === "string" ? data.leadId : undefined,
+        submitEventId: pixelConfig.enabled && pixelConfig.useTikTok ? submitEventId : undefined,
       });
       router.push(
         `/l/${encodeURIComponent(slug)}/thank-you?value=${encodeURIComponent(String(v))}&cur=IQD`,
